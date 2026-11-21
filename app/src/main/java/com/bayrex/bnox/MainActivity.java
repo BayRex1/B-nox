@@ -22,6 +22,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -50,6 +51,8 @@ public class MainActivity extends Activity {
     private int accent = Color.rgb(143, 104, 255);
     private LinearLayout root;
     private String activeFolder = "Все";
+    private boolean unlocked = false;
+    private boolean lockOnResume = false;
     private final List<AppEntry> apps = new ArrayList<>();
 
     @Override
@@ -62,7 +65,7 @@ public class MainActivity extends Activity {
         DevicePolicyManager dpm = (DevicePolicyManager)
                 getSystemService(Context.DEVICE_POLICY_SERVICE);
         if (dpm == null || !dpm.isProfileOwnerApp(getPackageName())) {
-            showProvisionScreen();
+            if (!openManagedProfileCopy()) showProvisionScreen();
             return;
         }
 
@@ -72,6 +75,43 @@ public class MainActivity extends Activity {
         } else {
             showPinScreen(true);
         }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (unlocked) lockOnResume = true;
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (lockOnResume) {
+            lockOnResume = false;
+            unlocked = false;
+            showPinScreen(false);
+        }
+    }
+
+    private boolean openManagedProfileCopy() {
+        try {
+            LauncherApps launcherApps = (LauncherApps) getSystemService(Context.LAUNCHER_APPS_SERVICE);
+            if (launcherApps == null) return false;
+            UserHandle current = Process.myUserHandle();
+            for (UserHandle profile : launcherApps.getProfiles()) {
+                if (profile.equals(current)) continue;
+                List<LauncherActivityInfo> activities =
+                        launcherApps.getActivityList(getPackageName(), profile);
+                if (!activities.isEmpty()) {
+                    launcherApps.startMainActivity(
+                            new ComponentName(getPackageName(), MainActivity.class.getName()),
+                            profile, null, null);
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
     }
 
     private android.content.SharedPreferences getPreferences() {
@@ -231,6 +271,7 @@ public class MainActivity extends Activity {
     }
 
     private void showHome() {
+        unlocked = true;
         root = baseLayout();
         LinearLayout header = new LinearLayout(this);
         header.setGravity(Gravity.CENTER_VERTICAL);
@@ -266,7 +307,7 @@ public class MainActivity extends Activity {
         List<String> sorted = new ArrayList<>(folders);
         Collections.sort(sorted);
         for (String folder : sorted) addFolderChip(chips, folder);
-        ScrollView chipScroll = new ScrollView(this);
+        HorizontalScrollView chipScroll = new HorizontalScrollView(this);
         chipScroll.setHorizontalScrollBarEnabled(false);
         chipScroll.addView(chips);
         root.addView(chipScroll, new LinearLayout.LayoutParams(-1, dp(54)));
