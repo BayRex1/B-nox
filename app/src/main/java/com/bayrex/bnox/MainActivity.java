@@ -7,6 +7,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.content.pm.LauncherApps;
+import android.content.pm.LauncherActivityInfo;
+import android.os.UserHandle;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -269,6 +272,10 @@ public class MainActivity extends Activity {
         root.addView(chipScroll, new LinearLayout.LayoutParams(-1, dp(54)));
 
         addSpace(root, 8);
+        Button addApps = makeButton("+ Добавить приложения");
+        root.addView(addApps);
+        addApps.setOnClickListener(v -> showAvailableApps());
+        addSpace(root, 14);
         TextView section = addText(root, "Приложения", 18, Color.WHITE, true);
         addSpace(root, 8);
 
@@ -319,6 +326,66 @@ public class MainActivity extends Activity {
         }
         addText(root, "Нажмите для запуска • удерживайте для выбора папки", 12, 0xFF777D93, false);
         setContentView(root);
+    }
+
+    private void showAvailableApps() {
+        DevicePolicyManager dpm = (DevicePolicyManager)
+                getSystemService(Context.DEVICE_POLICY_SERVICE);
+        LauncherApps launcherApps = (LauncherApps) getSystemService(Context.LAUNCHER_APPS_SERVICE);
+        if (dpm == null || launcherApps == null) {
+            Toast.makeText(this, "Список приложений недоступен.", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        List<LauncherActivityInfo> available = new ArrayList<>();
+        UserHandle current = Process.myUserHandle();
+        try {
+            for (UserHandle profile : launcherApps.getProfiles()) {
+                if (profile.equals(current)) continue;
+                available.addAll(launcherApps.getActivityList(null, profile));
+            }
+        } catch (SecurityException e) {
+            Toast.makeText(this, "Android не разрешил просмотреть приложения другого профиля.", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        final java.util.LinkedHashMap<String, String> unique = new java.util.LinkedHashMap<>();
+        for (LauncherActivityInfo item : available) {
+            String pkg = item.getApplicationInfo().packageName;
+            if (!pkg.equals(getPackageName())) unique.put(pkg, item.getLabel().toString());
+        }
+        if (unique.isEmpty()) {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("Добавить приложения")
+                    .setMessage("В личном профиле не найдено приложений, которые можно добавить. Сначала установите нужное приложение обычным способом.")
+                    .setPositiveButton("Понятно", null)
+                    .show();
+            return;
+        }
+
+        List<String> packages = new ArrayList<>(unique.keySet());
+        List<String> labels = new ArrayList<>(unique.values());
+        boolean[] checked = new boolean[packages.size()];
+        String[] names = labels.toArray(new String[0]);
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Добавить в B-Nox")
+                .setMultiChoiceItems(names, checked, (dialog, which, isChecked) -> checked[which] = isChecked)
+                .setNegativeButton("Отмена", null)
+                .setPositiveButton("Добавить", (dialog, which) -> {
+                    int added = 0;
+                    for (int i = 0; i < packages.size(); i++) {
+                        if (!checked[i]) continue;
+                        try {
+                            if (dpm.installExistingPackage(
+                                    new ComponentName(this, AdminReceiver.class), packages.get(i))) {
+                                added++;
+                            }
+                        } catch (Exception ignored) {
+                        }
+                    }
+                    Toast.makeText(this, "Добавлено приложений: " + added, Toast.LENGTH_LONG).show();
+                    showHome();
+                }).show();
     }
 
     private void loadApps() {
