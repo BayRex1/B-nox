@@ -232,7 +232,11 @@ public class MainActivity extends Activity {
         LinearLayout header = new LinearLayout(this);
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.setOrientation(LinearLayout.HORIZONTAL);
-        TextView title = addText(header, "B-Nox", 28, Color.WHITE, true);
+        TextView title = new TextView(this);
+        title.setText("B-Nox");
+        title.setTextSize(28);
+        title.setTextColor(Color.WHITE);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         header.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
         Button lock = makeSmallButton("Заблокировать");
         header.addView(lock);
